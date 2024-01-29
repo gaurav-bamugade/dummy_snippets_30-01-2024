@@ -1,0 +1,83 @@
+public class ApiResponse<T> {
+    private T data;
+    private String status;
+    private String responseMessage;
+
+    public ApiResponse(T data, String status, String responseMessage) {
+        this.data = data;
+        this.status = status;
+        this.responseMessage = responseMessage;
+    }
+
+    public T getData() {
+        return data;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public String getResponseMessage() {
+        return responseMessage;
+    }
+}
+
+
+
+public class AnimeRepository {
+    // ...
+
+    public MutableLiveData<ApiResponse<List<AnimeInfoModel>>> getMutableLiveData() {
+        AnimeDbApiDataService dbApiDataService = AnimeDbRetrofitInstance.getService();
+        Call<AnimeGetDataModel> call = dbApiDataService.getAllAnime(1, 1000);
+        call.enqueue(new Callback<AnimeGetDataModel>() {
+            @Override
+            public void onResponse(Call<AnimeGetDataModel> call, Response<AnimeGetDataModel> response) {
+                if (response.isSuccessful()) {
+                    AnimeGetDataModel animeGetDataModel = response.body();
+                    if (animeGetDataModel != null && "Failed".equals(animeGetDataModel.getStatus())) {
+                        // Handle failed status
+                        String responseMessage = animeGetDataModel.getResponseMessage();
+                        ApiResponse<List<AnimeInfoModel>> apiResponse = new ApiResponse<>(null, "Failed", responseMessage);
+                        mutableLiveData.setValue(apiResponse);
+                    } else {
+                        List<AnimeInfoModel> animeInfoModels = new ArrayList<>(animeGetDataModel.getData());
+                        ApiResponse<List<AnimeInfoModel>> apiResponse = new ApiResponse<>(animeInfoModels, "Success", null);
+                        mutableLiveData.setValue(apiResponse);
+                    }
+                } else {
+                    // Handle non-successful response (e.g., 400, 404, 500)
+                    // Pass the error information to the UI
+                    String status = String.valueOf(response.code());
+                    String responseMessage = "Error occurred.";
+                    ApiResponse<List<AnimeInfoModel>> apiResponse = new ApiResponse<>(null, status, responseMessage);
+                    mutableLiveData.setValue(apiResponse);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<AnimeGetDataModel> call, Throwable t) {
+                // Handle network failure
+                // For example, set an error message in the LiveData
+                ApiResponse<List<AnimeInfoModel>> apiResponse = new ApiResponse<>(null, "Failed", "Network error");
+                mutableLiveData.setValue(apiResponse);
+            }
+        });
+        return mutableLiveData;
+    }
+}
+
+
+animeMainActivityViewModel.getAllAnime().observe(this, new Observer<ApiResponse<List<AnimeInfoModel>>>() {
+    @Override
+    public void onChanged(ApiResponse<List<AnimeInfoModel>> apiResponse) {
+        if ("Success".equals(apiResponse.getStatus())) {
+            // Update UI with the list of anime
+            animeInfo = apiResponse.getData();
+            showOnRecyclerView();
+        } else {
+            // Handle non-successful response
+            Toast.makeText(YourActivity.this, "Error: " + apiResponse.getResponseMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+});
